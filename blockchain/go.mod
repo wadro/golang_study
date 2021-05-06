@@ -1,3 +1,3 @@
-module github.com/tensor-programming/golang-blockchain
+module github.com/wadro/golang-study/blockchain
 
 go 1.14
