@@ -1,7 +1,10 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 
 	"github.com/wadro/golang-study/blockchain/bc"
@@ -15,13 +18,34 @@ Installing 3 tools at C:\Users\echo1\go\bin in module mode.
   staticcheck
 */
 
-func main() {
-	chain := bc.InitBlockChain()
-	chain.AddBlock("First")
-	chain.AddBlock("Second")
-	chain.AddBlock("Third")
+type CommandLine struct {
+	blockchain *bc.BlockChain
+}
 
-	for _, block := range chain.Blocks {
+func (cli *CommandLine) printUsage() {
+	fmt.Println("Usage:")
+	fmt.Println(" add -block BLOCK_DATA - add a block to the chain")
+	fmt.Println(" print - Prints the blocks in the chain")
+}
+
+func (cli *CommandLine) validateArgs() {
+	if len(os.Args) < 2 {
+		cli.printUsage()
+		runtime.Goexit()
+	}
+}
+
+func (cli *CommandLine) addBlock(data string) {
+	cli.blockchain.AddBlock(data)
+	fmt.Println("Added Block!")
+}
+
+func (cli *CommandLine) printChain() {
+	iter := cli.blockchain.Iterator()
+
+	for {
+		block := iter.Next()
+
 		fmt.Printf("\nPrev Hash: %x\n", block.PrevHash)
 		fmt.Printf("Data: %s\n", block.Data)
 		fmt.Printf("Hash: %x\n\n", block.Hash)
@@ -29,6 +53,53 @@ func main() {
 		pow := bc.NewProof(block)
 		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
 		fmt.Println()
+
+		if len(block.PrevHash) == 0 {
+			break
+		}
 	}
-	fmt.Println(chain)
+}
+
+func (cli *CommandLine) run() {
+	cli.validateArgs()
+
+	addBlockCmd := flag.NewFlagSet("add", flag.ExitOnError)
+	printChainCmd := flag.NewFlagSet("print", flag.ExitOnError)
+	addBlockData := addBlockCmd.String("block", "", "Block data")
+
+	switch os.Args[1] {
+	case "add":
+		err := addBlockCmd.Parse(os.Args[2:])
+		bc.Handle(err)
+
+	case "print":
+		err := printChainCmd.Parse(os.Args[2:])
+		bc.Handle(err)
+
+	default:
+		cli.printUsage()
+		runtime.Goexit()
+	}
+
+	if addBlockCmd.Parsed() {
+		if *addBlockData == "" {
+			addBlockCmd.Usage()
+			runtime.Goexit()
+		}
+		cli.addBlock(*addBlockData)
+	}
+
+	if printChainCmd.Parsed() {
+		cli.printChain()
+	}
+}
+
+func main() {
+	defer os.Exit(0) // ensure properly exition
+	chain := bc.InitBlockChain()
+	defer chain.Database.Close()
+
+	cli := CommandLine{chain}
+	cli.run()
+	defer fmt.Println(chain)
 }
